@@ -1,4 +1,5 @@
 import re
+import mimetypes
 import urllib.request
 import os, sys, getopt
 import shutil
@@ -13,11 +14,11 @@ from wallet.models import Pass, Barcode, StoreCard
 
 # Create the application instance
 app = Flask(__name__, template_folder="templates", static_url_path='')
-# Create a URL route in our application for "/"
 
+# Create a URL route in our application for "/"
 @app.route('/')
 def home():
-    return redirect("https://www.icloud.com/shortcuts/1de2bda171f3470f9fb94a6cb68dabdd", code=302)
+    return redirect("https://www.icloud.com/shortcuts/02a14e2324eb46fea473e9bc7485bffa", code=302)
 
 @app.route('/bark')
 def bark():
@@ -26,8 +27,18 @@ def bark():
 @app.route('/api/apple/barcode/<barcode>', methods=['GET', 'POST'])
 def gen_apple_wallet(barcode):
     content = request.get_json(silent=True)
-    urllib.request.urlretrieve("http://barcodes4.me/barcode/c39/" + barcode + ".png", "strip.png")
     simplename = re.sub('[^a-zA-Z0-9]', '', content["name"]).lower()
+
+    if os.path.exists("/app/static/passes/" + simplename + "/" + barcode):
+        shutil.rmtree("/app/static/passes/" + simplename + "/" + barcode)
+
+    if os.path.exists("/app/static/passes/" + simplename):
+        os.mkdir("/app/static/passes/" + simplename + "/" + barcode)
+    else:
+        os.mkdir("/app/static/passes/" + simplename)
+        os.mkdir("/app/static/passes/" + simplename + "/" + barcode)
+
+    urllib.request.urlretrieve("http://barcodes4.me/barcode/c39/" + barcode + ".png?resolution=2", "/app/static/passes/" + simplename + "/" + barcode + "/strip.png")
 
     cardInfo = StoreCard()
     cardInfo.addHeaderField('barcode', barcode, 'Account Number')
@@ -37,8 +48,8 @@ def gen_apple_wallet(barcode):
     cardInfo.addBackField('credit','https://wallet.shane.app','Created By: ')
 
     organizationName = content["name"]
-    passTypeIdentifier = pass_type_ident
-    teamIdentifier = team_ident
+    passTypeIdentifier = os.environ.get('PASS_TYPE_IDENT')
+    teamIdentifier = os.environ.get('TEAM_IDENT')
     passfile = Pass(cardInfo, \
     passTypeIdentifier=passTypeIdentifier, \
     organizationName=organizationName, \
@@ -49,60 +60,31 @@ def gen_apple_wallet(barcode):
     passfile.labelColor = content["label_color"]
     passfile.backgroundColor = content["background_color"]
     passfile.foregroundColor = content["foreground_color"]
-    passfile.serialNumber = pass_type_ident + '.' + simplename + '.' + barcode
+    passfile.serialNumber = os.environ.get('PASS_TYPE_IDENT') + '.' + simplename + '.' + barcode
     passfile.barcode = Barcode(message = barcode)
 
-    imgdata_icon = open("icon.png", "wb")
-    imgdata_logo = open("logo.png", "wb")
+    imgdata_icon = open("/app/static/passes/" + simplename + "/" + barcode + "/icon.png", "wb")
+    imgdata_logo = open("/app/static/passes/" + simplename + "/" + barcode + "/logo.png", "wb")
     imgdata_icon.write(base64.b64decode(str(content["icon"])))
     imgdata_logo.write(base64.b64decode(str(content["logo"])))
     imgdata_icon.close()
     imgdata_logo.close()
 
-    passfile.addFile('icon.png', open('icon.png', 'rb'))
-    passfile.addFile('logo.png', open('logo.png', 'rb'))
-    passfile.addFile('strip.png', open('strip.png', 'rb'))
+    passfile.addFile('icon.png', open('/app/static/passes/' + simplename + '/' + barcode + 'icon.png', 'rb'))
+    passfile.addFile('logo.png', open('/app/static/passes/' + simplename + '/' + barcode + 'logo.png', 'rb'))
+    passfile.addFile('strip.png', open('/app/static/passes/' + simplename + '/' + barcode + 'strip.png', 'rb'))
 
     if content["location"]:
         passfile.locations = [{"latitude" : float(content["latitude"]), "longitude" : float(content["longitude"]), "relevantText" : content["relevant_text"]}]
 
-    if os.path.exists("/data/passes/" + simplename + "/" + barcode):
-        shutil.rmtree("/data/passes/" + simplename + "/" + barcode)
+    passfile.create('/app/crts/certificate.pem', '/app/crts/key.pem', '/app/crts/wwdr.pem', os.environ.get('PASS_PASSWORD'), '/app/static/passes/' + simplename + '/' + barcode + '/pass.pkpass')
+    return os.environ.get('RETURN_ADDRESS').replace('"', '') + "/passes/" + simplename  + "/" + barcode + "/pass.pkpass"
+    #return app.send_static_file("passes/" + simplename  + "/" + barcode + "/pass.pkpass")
 
-    if os.path.exists("/data/passes/" + simplename):
-        os.mkdir("/data/passes/" + simplename + "/" + barcode)
-    else:
-        os.mkdir("/data/passes/" + simplename)
-        os.mkdir("/data/passes/" + simplename + "/" + barcode)
+def main():
+    mimetypes.add_type('application/vnd.apple.pkpass', '.pkpass')
+    app.run(host='0.0.0.0', port=5002, debug=False)
 
-    passfile.create('/data/crts/certificate.pem', '/data/crts/key.pem', '/data/crts/wwdr.pem', pass_password, '/data/passes/' + simplename + '/' + barcode + '/pass.pkpass')
-    return return_address + simplename  + "/" + barcode + "/pass.pkpass"
-
-
-def main(argv):
-    global pass_type_ident
-    global team_ident
-    global pass_password
-    global return_address
-    try:
-        opts, args = getopt.getopt(argv,"hi:o:p:r:",["pass=","team=","ident=","return="])
-    except getopt.GetoptError:
-        print ('pyawal.py -p <pass_type_ident> -t <team_ident> -p <pass_password>')
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print ('pyawal.py -i <pass_type_ident> -t <team_ident> -p <pass_password>')
-            sys.exit()
-        elif opt in ("-i", "--ident"):
-            pass_type_ident = arg
-        elif opt in ("-t", "--team"):
-            team_ident = arg
-        elif opt in ("-p", "--pass"):
-            pass_password = arg
-        elif opt in ("-r", "--return"):
-            return_address = arg
-    app.run(host='0.0.0.0', port=5001, debug=True)
-    
 # If we're running in stand alone mode, run the application
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main()
