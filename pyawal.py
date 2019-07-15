@@ -38,7 +38,10 @@ def gen_apple_wallet(barcode):
         os.mkdir("/app/static/passes/" + simplename)
         os.mkdir("/app/static/passes/" + simplename + "/" + barcode)
 
-    urllib.request.urlretrieve("http://barcodes4.me/barcode/c39/" + barcode + ".png?resolution=2", "/app/static/passes/" + simplename + "/" + barcode + "/strip.png")
+    if len(barcode) > 7:
+        urllib.request.urlretrieve("http://barcodes4.me/barcode/c39/" + barcode + ".png?resolution=1", "/app/static/passes/" + simplename + "/" + barcode + "/strip.png")
+    else:
+        urllib.request.urlretrieve("http://barcodes4.me/barcode/c39/" + barcode + ".png?resolution=2", "/app/static/passes/" + simplename + "/" + barcode + "/strip.png")
 
     cardInfo = StoreCard()
     cardInfo.addHeaderField('barcode', barcode, 'Account Number')
