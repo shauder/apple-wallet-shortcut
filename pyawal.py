@@ -70,9 +70,9 @@ def gen_apple_wallet(barcode):
     imgdata_icon.close()
     imgdata_logo.close()
 
-    passfile.addFile('icon.png', open('/app/static/passes/' + simplename + '/' + barcode + 'icon.png', 'rb'))
-    passfile.addFile('logo.png', open('/app/static/passes/' + simplename + '/' + barcode + 'logo.png', 'rb'))
-    passfile.addFile('strip.png', open('/app/static/passes/' + simplename + '/' + barcode + 'strip.png', 'rb'))
+    passfile.addFile('icon.png', open('/app/static/passes/' + simplename + '/' + barcode + '/icon.png', 'rb'))
+    passfile.addFile('logo.png', open('/app/static/passes/' + simplename + '/' + barcode + '/logo.png', 'rb'))
+    passfile.addFile('strip.png', open('/app/static/passes/' + simplename + '/' + barcode + '/strip.png', 'rb'))
 
     if content["location"]:
         passfile.locations = [{"latitude" : float(content["latitude"]), "longitude" : float(content["longitude"]), "relevantText" : content["relevant_text"]}]
