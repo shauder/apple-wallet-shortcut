@@ -1,0 +1,5 @@
+export PASS_TYPE_IDENT=pass.identity
+export TEAM_IDENT=teamident
+export PASS_PASSWORD=certpasswords
+export PRD_ADDRESS="https://wallet.domain.com"
+export DEV_ADDRESS="http://192.168.0.101"
