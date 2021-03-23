@@ -1,11 +1,10 @@
 import re
 import mimetypes
-import json
-import urllib.request
-import os, sys, getopt
-import shutil
-import base64
+import os
 import barcode
+import base64
+from io import BytesIO
+from PIL import Image
 from barcode import Code39
 from barcode.writer import ImageWriter
 from flask import (
@@ -72,40 +71,27 @@ def gen_apple_wallet(barcode_input):
     pass_background_color = content.get('background_color', 'rgb(37,170,225)')
     pass_label_color = content.get('label_color', 'rgb(241,92,34)')
 
-    # print(pass_name)
-    # print(pass_description)
-    # print(pass_icon)
-    # print(pass_logo)
-    # print(pass_location)
-    # print(pass_latitude)
-    # print(pass_longitude)
-    # print(pass_relevant_text)
-    # print(pass_foreground_color)
-    # print(pass_background_color)
-    # print(pass_label_color)
+    app_debug = content.get('debug', False)
+
+    if app_debug:
+        print(pass_name)
+        print(pass_description)
+        print(pass_icon)
+        print(pass_logo)
+        print(pass_location)
+        print(pass_latitude)
+        print(pass_longitude)
+        print(pass_relevant_text)
+        print(pass_foreground_color)
+        print(pass_background_color)
+        print(pass_label_color)
 
     simplename = re.sub('[^a-zA-Z0-9]', '', pass_name).lower()
 
-    if os.path.exists('static/passes/' + simplename + '/' + barcode_input):
-        shutil.rmtree('static/passes/' + simplename + '/' + barcode_input)
-
-    if os.path.exists('static/passes/' + simplename):
-        os.mkdir('static/passes/' + simplename + '/' + barcode_input)
-    else:
-        os.mkdir('static/passes/' + simplename)
-        os.mkdir('static/passes/' + simplename + '/' + barcode_input)
-
-    imgdata_icon = open('static/passes/' + simplename + '/' + barcode_input + '/icon.png', 'wb')
-    imgdata_icon.write(base64.b64decode(str(pass_icon)))
-    imgdata_icon.close()
-
-    imgdata_logo = open('static/passes/' + simplename + '/' + barcode_input + '/logo.png', 'wb')
-    imgdata_logo.write(base64.b64decode(str(pass_logo)))
-    imgdata_logo.close()
-
+    pass_buffer = BytesIO()
     AW_C39 = barcode.get_barcode_class('Code39')
-    c39 = AW_C39(barcode_input, writer=ImageWriter(), add_checksum=False)
-    fullname = c39.save('static/passes/' + simplename + '/' + barcode_input + '/strip', {'font_size': 0, 'dpi': 300})
+    AW_C39(barcode_input, writer=ImageWriter(), add_checksum=False).render({'font_size': 0, 'dpi': 300}).save(pass_buffer, format='PNG')
+    pass_barcode = base64.b64encode(pass_buffer.getvalue())
 
     cardInfo = StoreCard()
     cardInfo.addHeaderField('barcode', barcode_input, 'Account Number')
@@ -130,17 +116,17 @@ def gen_apple_wallet(barcode_input):
     if pass_location:
         passfile.locations = [{'latitude' : float(pass_latitude), 'longitude' : float(pass_longitude), 'relevantText' : pass_relevant_text}]
 
-    passfile.addFile('icon.png', open('static/passes/' + simplename + '/' + barcode_input + '/icon.png', 'rb'))
-    passfile.addFile('logo.png', open('static/passes/' + simplename + '/' + barcode_input + '/logo.png', 'rb'))
-    passfile.addFile('strip.png', open('static/passes/' + simplename + '/' + barcode_input + '/strip.png', 'rb'))
-
-    passfile.create('crts/certificate.pem', 'crts/key.pem', 'crts/wwdr.pem', pass_passcode, 'static/passes/' + simplename + '/' + barcode_input + '/pass.pkpass')
+    passfile.addFile('icon.png', BytesIO(base64.b64decode(str(pass_icon))))
+    passfile.addFile('logo.png', BytesIO(base64.b64decode(str(pass_logo))))
+    passfile.addFile('strip.png', BytesIO(base64.b64decode(pass_barcode)))
+    
+    passfile.create('crts/certificate.pem', 'crts/key.pem', 'crts/wwdr.pem', pass_passcode, 'passes/' + simplename + '_' + barcode_input + '.pkpass')
 
     return return_url.replace('"', '') + '/api/v1/' + simplename  + '/' + barcode_input
 
 @app.route('/api/v1/<get_simplename>/<get_barcode>', methods=['POST', 'GET'])
 def get_apple_wallet(get_simplename, get_barcode):
-    return send_file('static/passes/' + get_simplename + '/' + get_barcode + '/pass.pkpass', mimetype='application/vnd.apple.pkpass')
+    return send_file('passes/' + get_simplename + '_' + get_barcode + '.pkpass', mimetype='application/vnd.apple.pkpass')
 
 def main():
     mimetypes.add_type('application/vnd.apple.pkpass', '.pkpass')
