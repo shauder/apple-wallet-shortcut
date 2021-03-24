@@ -44,20 +44,23 @@ app = Flask(__name__, template_folder='templates', static_url_path='')
 def home():
     return redirect(GENERIC_PASS_URL, code=302)
 
-@app.route('/bark')
-def bark():
-    return redirect(BARK_PASS_URL, code=302)
-
-@app.route('/api/apple/barcode/<barcode_input>', methods=['POST', 'GET'])
-def legacy_gen_apple_wallet(barcode_input):
-    return gen_apple_wallet(barcode_input)
-
 @app.route('/api/v1/c39/<barcode_input>', methods=['POST', 'GET'])
 def gen_apple_wallet(barcode_input):
-    if request.is_json:
-        content = request.get_json(silent=False)
+
+    if request.method == 'POST':
+        if request.is_json:
+            content = request.get_json(silent=False)
+        else:
+            content = { 'name': 'Membership Card' }
+
+    elif request.method == 'GET':
+        if request.is_json:
+            content = request.get_json(silent=False)
+        else:
+            content = request.args
+
     else:
-        content = { 'name': 'Membership Card' }
+        return
 
     pass_name = content.get('name', 'Membership Card')
     pass_description = content.get('description', 'My membership card C39 pass')
@@ -71,9 +74,9 @@ def gen_apple_wallet(barcode_input):
     pass_background_color = content.get('background_color', 'rgb(37,170,225)')
     pass_label_color = content.get('label_color', 'rgb(241,92,34)')
 
-    app_debug = content.get('debug', False)
+    pass_debug = content.get('debug', False)
 
-    if app_debug:
+    if pass_debug:
         print(pass_name)
         print(pass_description)
         print(pass_icon)
@@ -88,10 +91,10 @@ def gen_apple_wallet(barcode_input):
 
     simplename = re.sub('[^a-zA-Z0-9]', '', pass_name).lower()
 
-    pass_buffer = BytesIO()
+    pass_barcode_buffer = BytesIO()
     AW_C39 = barcode.get_barcode_class('Code39')
-    AW_C39(barcode_input, writer=ImageWriter(), add_checksum=False).render({'font_size': 0, 'dpi': 300}).save(pass_buffer, format='PNG')
-    pass_barcode = base64.b64encode(pass_buffer.getvalue())
+    AW_C39(barcode_input, writer=ImageWriter(), add_checksum=False).render({'font_size': 0, 'dpi': 300}).save(pass_barcode_buffer, format='PNG')
+    pass_barcode = base64.b64encode(pass_barcode_buffer.getvalue())
 
     cardInfo = StoreCard()
     cardInfo.addHeaderField('barcode', barcode_input, 'Account Number')
@@ -119,14 +122,10 @@ def gen_apple_wallet(barcode_input):
     passfile.addFile('icon.png', BytesIO(base64.b64decode(str(pass_icon))))
     passfile.addFile('logo.png', BytesIO(base64.b64decode(str(pass_logo))))
     passfile.addFile('strip.png', BytesIO(base64.b64decode(pass_barcode)))
-    
-    passfile.create('crts/certificate.pem', 'crts/key.pem', 'crts/wwdr.pem', pass_passcode, 'passes/' + simplename + '_' + barcode_input + '.pkpass')
 
-    return return_url.replace('"', '') + '/api/v1/' + simplename  + '/' + barcode_input
+    pass_encoded = base64.b64encode(passfile.create('crts/certificate.pem', 'crts/key.pem', 'crts/wwdr.pem', pass_passcode).getvalue())
 
-@app.route('/api/v1/<get_simplename>/<get_barcode>', methods=['POST', 'GET'])
-def get_apple_wallet(get_simplename, get_barcode):
-    return send_file('passes/' + get_simplename + '_' + get_barcode + '.pkpass', mimetype='application/vnd.apple.pkpass')
+    return send_file(BytesIO(base64.b64decode(pass_encoded)), mimetype='application/vnd.apple.pkpass', as_attachment=True, attachment_filename='pass.pkpass')
 
 def main():
     mimetypes.add_type('application/vnd.apple.pkpass', '.pkpass')
