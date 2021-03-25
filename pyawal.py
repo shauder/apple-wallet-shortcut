@@ -3,6 +3,7 @@ import mimetypes
 import os
 import barcode
 import base64
+import requests
 from urllib.parse import unquote_plus
 from io import BytesIO
 from PIL import Image
@@ -17,7 +18,7 @@ from flask import (
 )
 from wallet.models import Pass, Barcode, StoreCard
 
-GENERIC_PASS_URL = 'https://www.icloud.com/shortcuts/6e5a4142fdb14f48b68971cfc3d66ad2'
+GENERIC_PASS_URL = 'https://www.icloud.com/shortcuts/70e4911a049045eea3cfd32d3d9908e6'
 
 pass_type_id = os.environ.get('PASS_TYPE_IDENT')
 team_id = os.environ.get('TEAM_IDENT')
@@ -43,6 +44,10 @@ app = Flask(__name__, template_folder='templates', static_url_path='')
 @app.route('/')
 def home():
     return redirect(GENERIC_PASS_URL, code=302)
+
+@app.route('/api/v1/ip', methods=['POST', 'GET'])
+def get_ext_ip():
+    return requests.get('https://checkip.amazonaws.com').text.strip()
 
 @app.route('/api/v1/<barcode_type>/<barcode_input>', methods=['POST', 'GET'])
 def gen_apple_wallet(barcode_type, barcode_input):
@@ -202,8 +207,8 @@ def gen_apple_wallet(barcode_type, barcode_input):
     if pass_location:
         passfile.locations = [{'latitude' : float(pass_latitude), 'longitude' : float(pass_longitude), 'relevantText' : pass_relevant_text}]
 
-    passfile.addFile('icon.png', BytesIO(base64.b64decode(pass_icon)))
-    passfile.addFile('logo.png', BytesIO(base64.b64decode(pass_logo)))
+    passfile.addFile('icon.png', BytesIO(base64.b64decode(str(pass_icon))))
+    passfile.addFile('logo.png', BytesIO(base64.b64decode(str(pass_logo))))
 
     if not barcode_type.upper() == 'NOCODE':
         passfile.addFile('strip.png', BytesIO(base64.b64decode(pass_barcode)))
