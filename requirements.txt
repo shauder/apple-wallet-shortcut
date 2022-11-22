@@ -1,5 +1,5 @@
 Flask==1.0.2
 wallet_py3k==0.0.4
 python-barcode==0.13.1
-Pillow==8.1.2
+Pillow==9.3.0
 requests==2.25.1
